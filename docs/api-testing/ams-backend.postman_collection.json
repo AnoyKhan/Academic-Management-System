@@ -1,0 +1,1365 @@
+{
+  "info": {
+    "name": "AMS Backend API Verification",
+    "_postman_id": "ams-backend-api-verification",
+    "description": "End-to-end backend API verification for authentication, student, teacher, security, and validation scenarios.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const runId = pm.environment.get('runId') || Date.now().toString(36);",
+          "pm.environment.set('runId', runId);",
+          "if (!pm.environment.get('registerUsername')) { pm.environment.set('registerUsername', `qa_collection_${runId}`); }",
+          "if (!pm.environment.get('registerEmail')) { pm.environment.set('registerEmail', `qa.collection.${runId}@example.com`); }",
+          "if (!pm.environment.get('assignmentDeadline')) { pm.environment.set('assignmentDeadline', new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()); }",
+          "if (!pm.environment.get('attendanceDate')) { pm.environment.set('attendanceDate', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)); }",
+          "if (!pm.environment.get('createdTeacherAssignmentId')) { pm.environment.set('createdTeacherAssignmentId', pm.environment.get('teacherAssignmentId') || ''); }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth - Register unique student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{registerUsername}}\",\n  \"email\": \"{{registerEmail}}\",\n  \"password\": \"{{registerPassword}}\",\n  \"password2\": \"{{registerPassword}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const runId = Date.now().toString(36);",
+                "pm.environment.set('runId', runId);",
+                "pm.environment.set('registerUsername', `qa_collection_${runId}`);",
+                "pm.environment.set('registerEmail', `qa.collection.${runId}@example.com`);"
+              ]
+            }
+          },
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+                "pm.test('User payload exists', () => pm.expect(body.data.user).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Login unique student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registerEmail}}\",\n  \"password\": \"{{registerPassword}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+                "pm.test('Token payload exists', () => pm.expect(body.data.access).to.exist && pm.expect(body.data.refresh).to.exist);",
+                "pm.environment.set('authAccess', body.data.access);",
+                "pm.environment.set('authRefresh', body.data.refresh);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Refresh unique student token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/token/refresh/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh\": \"{{authRefresh}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+                "pm.test('Token payload exists', () => pm.expect(body.data.access).to.exist && pm.expect(body.data.refresh).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Profile unique student",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/profile/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+              "pm.test('User payload exists', () => pm.expect(body.data.user).to.exist);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Logout unique student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/logout/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh\": \"{{authRefresh}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Duplicate register is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{registerUsername}}\",\n  \"email\": \"{{registerEmail}}\",\n  \"password\": \"{{registerPassword}}\",\n  \"password2\": \"{{registerPassword}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));",
+                "pm.test('Validation errors exist', () => pm.expect(body.errors).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Missing fields are rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"missing-fields\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));",
+                "pm.test('Validation errors exist', () => pm.expect(body.errors).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Invalid role is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"invalid-role\",\n  \"email\": \"invalid.role@example.com\",\n  \"password\": \"{{registerPassword}}\",\n  \"password2\": \"{{registerPassword}}\",\n  \"role\": \"TEACHER\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));",
+                "pm.test('Validation errors exist', () => pm.expect(body.errors).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Invalid login is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"wrong-password\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Unauthorized profile is rejected",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/auth/profile/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Invalid JWT is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/token/verify/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"invalid.jwt.token\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Auth - Blacklisted refresh is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/token/verify/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{authRefreshOriginal}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Student - Login seeded student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+                "pm.test('Token payload exists', () => pm.expect(body.data.access).to.exist && pm.expect(body.data.refresh).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Student - Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/profile/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 404', () => pm.expect([200, 404]).to.include(pm.response.code));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag exists', () => pm.expect(body).to.have.property('success'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student - Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/dashboard/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 404', () => pm.expect([200, 404]).to.include(pm.response.code));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag exists', () => pm.expect(body).to.have.property('success'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student - Courses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/courses/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.environment.set('studentCourseId', body.data.results && body.data.results[0] ? body.data.results[0].id : '');",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student - Assignments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/assignments/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.environment.set('studentAssignmentId', body.data.results && body.data.results[0] ? body.data.results[0].id : '');",
+              "pm.environment.set('studentAssignmentId2', body.data.results && body.data.results[1] ? body.data.results[1].id : pm.environment.get('studentAssignmentId'));",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student - Submit assignment (valid)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/assignments/{{studentAssignmentId}}/submit/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/Users/anoy/Downloads/5th Semester/AMS/docs/api-testing/fixtures/submission.pdf"
+            }
+          ]
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.environment.set('studentSubmissionId', body.data.submission_id);",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Student - Submit assignment duplicate is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/assignments/{{studentAssignmentId}}/submit/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/Users/anoy/Downloads/5th Semester/AMS/docs/api-testing/fixtures/submission.pdf"
+            }
+          ]
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Student - Grades",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/grades/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student - Attendance",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/attendance/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Login seeded teacher",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{teacherEmail}}\",\n  \"password\": \"{{teacherPassword}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));",
+                "pm.test('Token payload exists', () => pm.expect(body.data.access).to.exist && pm.expect(body.data.refresh).to.exist);"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/profile/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/dashboard/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Courses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/courses/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.environment.set('teacherCourseId', body.data.results && body.data.results[0] ? body.data.results[0].id : '');",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Assignments list",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Create assignment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"QA Collection Assignment\",\n  \"description\": \"Created by the API collection\",\n  \"course_id\": {{teacherCourseId}},\n  \"deadline\": \"{{assignmentDeadline}}\"\n}"
+        },
+        "event": [
+          {
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const deadline = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();",
+                "pm.environment.set('assignmentDeadline', deadline);"
+              ]
+            }
+          },
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.environment.set('teacherAssignmentId', body.data.assignment.id);",
+                "pm.environment.set('createdTeacherAssignmentId', body.data.assignment.id);",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Assignment detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/{{createdTeacherAssignmentId}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Patch assignment",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/{{createdTeacherAssignmentId}}/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"QA Collection Assignment Updated\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Delete assignment",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/{{createdTeacherAssignmentId}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Submissions list",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/submissions/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.environment.set('teacherSubmissionId', body.data.results && body.data.results[0] ? body.data.results[0].id : '');",
+              "pm.environment.set('teacherStudentId', body.data.results && body.data.results[0] && body.data.results[0].student ? body.data.results[0].student.id : '');",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Submission detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/submissions/{{teacherSubmissionId}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Grade submission via POST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/submissions/{{teacherSubmissionId}}/grade/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marks\": \"88.50\",\n  \"feedback\": \"Good work\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Grade submission via PUT",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/submissions/{{teacherSubmissionId}}/grade/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marks\": \"91.25\",\n  \"feedback\": \"Updated feedback\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Attendance list",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/attendance/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Create attendance",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/attendance/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"student_id\": {{teacherStudentId}},\n  \"course_id\": {{teacherCourseId}},\n  \"date\": \"{{attendanceDate}}\",\n  \"status\": \"ABSENT\"\n}"
+        },
+        "event": [
+          {
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                  "pm.environment.set('attendanceDate', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));"
+              ]
+            }
+          },
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.environment.set('teacherAttendanceId', body.data.attendance.id);",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Update attendance",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/attendance/{{teacherAttendanceId}}/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"student_id\": {{teacherStudentId}},\n  \"course_id\": {{teacherCourseId}},\n  \"date\": \"{{attendanceDate}}\",\n  \"status\": \"PRESENT\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Duplicate attendance is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/attendance/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"student_id\": {{teacherStudentId}},\n  \"course_id\": {{teacherCourseId}},\n  \"date\": \"{{attendanceDate}}\",\n  \"status\": \"PRESENT\"\n}"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teacher - Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/notifications/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is true', () => pm.expect(body.success).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security - Student cannot access teacher dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/dashboard/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security - Teacher cannot access student dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/dashboard/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security - Teacher cannot access forbidden assignment",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/teacher/assignments/{{forbiddenAssignmentId}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security - Invalid file upload is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/assignments/{{studentAssignmentId2}}/submit/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/Users/anoy/Downloads/5th Semester/AMS/docs/api-testing/fixtures/invalid.exe"
+            }
+          ]
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Security - Large file upload is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentAccess}}"
+          }
+        ],
+        "url": "{{baseUrl}}/student/assignments/{{studentAssignmentId2}}/submit/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/Users/anoy/Downloads/5th Semester/AMS/docs/api-testing/fixtures/large-submission.pdf"
+            }
+          ]
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                "const body = pm.response.json();",
+                "pm.test('Success flag is false', () => pm.expect(body.success).to.eql(false));"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

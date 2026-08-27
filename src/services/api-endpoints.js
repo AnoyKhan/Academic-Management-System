@@ -1,0 +1,26 @@
+export const API_ENDPOINTS = {
+  auth: {
+    login: "/auth/login",
+    register: "/auth/register",
+    logout: "/auth/logout",
+    me: "/auth/profile",
+  },
+  students: "/student",
+  teachers: "/teacher",
+  courses: "/course",
+  assignments: "/assignment",
+  submissions: "/submissions",
+  grades: "/grade",
+  attendance: "/attendances",
+  materials: "/materials",
+  departments: "/departments",
+  batches: "/batches",
+  intakes: "/intakes",
+  reports: "/reports",
+  analytics: {
+    ai: "/analytics/ai",
+    performance: "/analytics/performance",
+    risk: "/analytics/risk",
+    attendance: "/analytics/attendance",
+  },
+};

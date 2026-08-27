@@ -1,0 +1,16 @@
+from .base import *  # noqa: F403
+
+
+DEBUG = True
+
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (  # noqa: F405
+    "rest_framework.renderers.JSONRenderer",
+    "rest_framework.renderers.BrowsableAPIRenderer",
+)
