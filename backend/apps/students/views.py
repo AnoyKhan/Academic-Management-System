@@ -12,6 +12,7 @@ from apps.assignments.models import Assignment, Submission
 from apps.attendance.models import Attendance
 from apps.courses.models import Course
 from apps.grades.models import Grade
+from apps.notifications.models import Notification
 from apps.shared.pagination import StandardPageNumberPagination
 from apps.shared.responses import success_response
 from .models import Student
@@ -21,6 +22,7 @@ from .serializers import (
     StudentAssignmentSerializer,
     StudentAttendanceSerializer,
     StudentGradeSerializer,
+    StudentNotificationSerializer,
     StudentProfileSerializer,
 )
 
@@ -210,4 +212,18 @@ class StudentDashboardView(StudentBaseAPIView):
                     many=True,
                 ).data,
             },
+        )
+
+
+class StudentNotificationListView(StudentBaseAPIView):
+    def get(self, request):
+        notifications = Notification.objects.filter(receiver=request.user).order_by(
+            "-created_at",
+        )
+        paginator = StandardPageNumberPagination()
+        page = paginator.paginate_queryset(notifications, request, view=self)
+        serializer = StudentNotificationSerializer(page, many=True)
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Notifications retrieved successfully",
         )

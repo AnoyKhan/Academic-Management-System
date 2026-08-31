@@ -1,15 +1,13 @@
 import { Navigate } from "react-router-dom";
-import { dummyAuthService } from "../services/dummy-auth";
+import { authService } from "../services/auth.service";
 import { ROUTE_PATHS } from "./route-paths";
 
 export function RootRedirect() {
-  const session = dummyAuthService.getSession();
+  const session = authService.getSession();
 
-  if (!session) {
+  if (!session?.accessToken) {
     return <Navigate to={ROUTE_PATHS.login} replace />;
   }
 
-  return (
-    <Navigate to={dummyAuthService.getDashboardPath(session.role)} replace />
-  );
+  return <Navigate to={authService.getDashboardPath(session.role)} replace />;
 }

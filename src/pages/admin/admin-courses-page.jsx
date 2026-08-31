@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { BookOpen, Plus } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Table } from "../../components/ui/table";
@@ -5,9 +6,48 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select } from "../../components/ui/select";
-import { courses, departments, teachers } from "../../data/admin-portal-data";
+import { adminService } from "../../services/admin.service";
 
 export function AdminCoursesPage() {
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCourses = async () => {
+      try {
+        setLoading(true);
+        const response = await adminService.getCourses();
+        const payload = adminService.unwrapData(response);
+
+        if (isMounted) {
+          setCourses(
+            Array.isArray(payload?.results) ? payload.results : payload || [],
+          );
+          setError("");
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(
+            loadError?.response?.data?.message || "Unable to load courses.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadCourses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <div className="space-y-5">
       <Card>
@@ -15,7 +55,8 @@ export function AdminCoursesPage() {
           Course Management
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Create courses, assign departments and teachers, and manage credit load.
+          Create courses, assign departments and teachers, and manage credit
+          load.
         </p>
       </Card>
 
@@ -24,16 +65,17 @@ export function AdminCoursesPage() {
           <Input placeholder="Code" />
           <Input placeholder="Course title" />
           <Select defaultValue="">
-            <option value="" disabled>Department</option>
-            {departments.map((department) => (
-              <option key={department.id}>{department.short}</option>
-            ))}
+            <option value="" disabled>
+              Department
+            </option>
+            <option>Computer Science</option>
+            <option>Business Administration</option>
           </Select>
           <Select defaultValue="">
-            <option value="" disabled>Teacher</option>
-            {teachers.map((teacher) => (
-              <option key={teacher.id}>{teacher.name}</option>
-            ))}
+            <option value="" disabled>
+              Teacher
+            </option>
+            <option>Faculty</option>
           </Select>
           <Button>
             <Plus className="h-4 w-4" />
@@ -43,18 +85,46 @@ export function AdminCoursesPage() {
       </Card>
 
       <Card>
-        <Table
-          columns={[
-            { key: "id", header: "Code" },
-            { key: "title", header: "Course" },
-            { key: "department", header: "Department" },
-            { key: "credits", header: "Credits" },
-            { key: "teacher", header: "Teacher" },
-            { key: "status", header: "Status", render: (value) => <Badge tone={value === "Running" ? "success" : "warning"}>{value}</Badge> },
-            { key: "id", header: "Action", render: () => <Button size="sm" variant="secondary"><BookOpen className="h-4 w-4" />View</Button> },
-          ]}
-          data={courses}
-        />
+        {loading ? (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Loading courses…
+          </p>
+        ) : error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        ) : (
+          <Table
+            columns={[
+              { key: "course_code", header: "Code" },
+              { key: "course_name", header: "Course" },
+              {
+                key: "teacher",
+                header: "Teacher",
+                render: (_, row) => row.teacher?.name ?? "—",
+              },
+              { key: "credit", header: "Credits" },
+              {
+                key: "status",
+                header: "Status",
+                render: (value) => (
+                  <Badge tone={value === "Running" ? "success" : "warning"}>
+                    {value}
+                  </Badge>
+                ),
+              },
+              {
+                key: "id",
+                header: "Action",
+                render: () => (
+                  <Button size="sm" variant="secondary">
+                    <BookOpen className="h-4 w-4" />
+                    View
+                  </Button>
+                ),
+              },
+            ]}
+            data={courses}
+          />
+        )}
       </Card>
     </div>
   );

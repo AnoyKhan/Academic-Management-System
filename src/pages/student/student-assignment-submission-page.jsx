@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
@@ -7,18 +7,65 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { FormField } from "../../components/forms/form-field";
-import { assignmentItems } from "../../data/student-portal-data";
 import { ROUTE_PATHS } from "../../routes/route-paths";
+import { studentService } from "../../services/student.service";
+
+const formatDate = (value) => {
+  if (!value) return "—";
+
+  try {
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
+};
 
 export function StudentAssignmentSubmissionPage() {
   const navigate = useNavigate();
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(false);
+  const [assignment, setAssignment] = useState(null);
+  const [fetching, setFetching] = useState(true);
 
-  const assignment = useMemo(
-    () => assignmentItems.find((item) => item.id === assignmentId),
-    [assignmentId],
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAssignment = async () => {
+      try {
+        setFetching(true);
+        const response = await studentService.getAssignments();
+        const payload = studentService.unwrapData(response);
+        const list = Array.isArray(payload)
+          ? payload
+          : (payload?.results ?? []);
+
+        if (isMounted) {
+          setAssignment(
+            list.find((item) => String(item.id) === String(assignmentId)) ||
+              null,
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setAssignment(null);
+        }
+      } finally {
+        if (isMounted) {
+          setFetching(false);
+        }
+      }
+    };
+
+    loadAssignment();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assignmentId]);
 
   const {
     register,
@@ -26,18 +73,45 @@ export function StudentAssignmentSubmissionPage() {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      submissionLink: "",
-      note: "",
+      file: null,
     },
   });
 
-  const onSubmit = async () => {
+  const onSubmit = async (values) => {
+    const uploadedFile = values.file?.[0];
+
+    if (!uploadedFile) {
+      toast.error("Please select a file to submit.");
+      return;
+    }
+
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    toast.success("Assignment submitted successfully (mock).");
-    setLoading(false);
-    navigate(ROUTE_PATHS.studentAssignments);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      await studentService.submitAssignment(assignmentId, formData);
+      toast.success("Assignment submitted successfully.");
+      navigate(ROUTE_PATHS.studentAssignments);
+    } catch (submitError) {
+      toast.error(
+        submitError?.response?.data?.message ||
+          "Submission failed. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (fetching) {
+    return (
+      <Card>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Loading assignment…
+        </p>
+      </Card>
+    );
+  }
 
   if (!assignment) {
     return (
@@ -62,49 +136,28 @@ export function StudentAssignmentSubmissionPage() {
           Submit Assignment
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {assignment.title} - {assignment.course} (Due: {assignment.dueDate})
+          {assignment.title} - {assignment.course} (Due:{" "}
+          {formatDate(assignment.deadline)})
         </p>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          {assignment.description}
+          {assignment.description ||
+            "No description provided for this assignment."}
         </p>
       </Card>
 
       <Card>
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <FormField
-            label="Repository / Drive Link"
-            htmlFor="submission-link"
-            error={errors.submissionLink?.message}
+            label="Submission file"
+            htmlFor="submission-file"
+            error={errors.file?.message}
           >
             <Input
-              id="submission-link"
-              placeholder="https://"
-              {...register("submissionLink", {
-                required: "Submission link is required.",
-                pattern: {
-                  value: /^https?:\/\/.+/i,
-                  message: "Enter a valid URL starting with http or https.",
-                },
-              })}
-            />
-          </FormField>
-
-          <FormField
-            label="Submission Note"
-            htmlFor="submission-note"
-            error={errors.note?.message}
-          >
-            <textarea
-              id="submission-note"
-              rows={5}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              placeholder="Add a short note for instructor..."
-              {...register("note", {
-                required: "Please add a submission note.",
-                minLength: {
-                  value: 20,
-                  message: "Note must be at least 20 characters.",
-                },
+              id="submission-file"
+              type="file"
+              accept=".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx"
+              {...register("file", {
+                required: "Please select a file to submit.",
               })}
             />
           </FormField>

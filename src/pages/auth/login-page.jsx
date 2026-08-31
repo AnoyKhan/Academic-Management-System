@@ -5,12 +5,10 @@ import toast from "react-hot-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
-import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { FormField } from "../../components/forms/form-field";
-import { AUTH_ROLE_OPTIONS } from "../../data/dummy-auth";
-import { dummyAuthService } from "../../services/dummy-auth";
+import { authService } from "../../services/auth.service";
 import { ROUTE_PATHS } from "../../routes/route-paths";
 
 const REMEMBER_KEY = "ams-remember-email";
@@ -33,7 +31,6 @@ export function LoginPage() {
     defaultValues: {
       email: rememberedEmail,
       password: "",
-      role: "student",
       rememberMe: Boolean(rememberedEmail),
     },
   });
@@ -41,7 +38,7 @@ export function LoginPage() {
   const onSubmit = async (values) => {
     setLoading(true);
     try {
-      const session = await dummyAuthService.login(values);
+      const session = await authService.login(values);
 
       if (values.rememberMe) {
         localStorage.setItem(REMEMBER_KEY, values.email);
@@ -59,7 +56,9 @@ export function LoginPage() {
         navigate(ROUTE_PATHS.admin);
       }
     } catch (error) {
-      toast.error(error.message || "Login failed.");
+      const message =
+        error?.response?.data?.detail || error.message || "Login failed.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -71,7 +70,7 @@ export function LoginPage() {
         Login to AMS
       </h2>
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-        Use dummy credentials or register a new account.
+        Sign in with your AMS email and password.
       </p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
@@ -92,23 +91,6 @@ export function LoginPage() {
               },
             })}
           />
-        </FormField>
-
-        <FormField
-          label="Role"
-          htmlFor="login-role"
-          error={errors.role?.message}
-        >
-          <Select
-            id="login-role"
-            {...register("role", { required: "Please choose a role." })}
-          >
-            {AUTH_ROLE_OPTIONS.map((role) => (
-              <option key={role.value} value={role.value}>
-                {role.label}
-              </option>
-            ))}
-          </Select>
         </FormField>
 
         <FormField
@@ -177,13 +159,6 @@ export function LoginPage() {
           Create account
         </Link>
       </p>
-
-      <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-3 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
-        <p className="font-semibold">Dummy credentials</p>
-        <p>student@ams.dev / Password123! / Student</p>
-        <p>teacher@ams.dev / Password123! / Teacher</p>
-        <p>admin@ams.dev / Password123! / Admin</p>
-      </div>
     </Card>
   );
 }

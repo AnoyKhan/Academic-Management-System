@@ -5,12 +5,10 @@ import toast from "react-hot-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
-import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { FormField } from "../../components/forms/form-field";
-import { AUTH_ROLE_OPTIONS } from "../../data/dummy-auth";
-import { dummyAuthService } from "../../services/dummy-auth";
+import { authService } from "../../services/auth.service";
 import { ROUTE_PATHS } from "../../routes/route-paths";
 
 export function RegisterPage() {
@@ -28,7 +26,6 @@ export function RegisterPage() {
     defaultValues: {
       name: "",
       email: "",
-      role: "student",
       password: "",
       confirmPassword: "",
     },
@@ -37,11 +34,16 @@ export function RegisterPage() {
   const onSubmit = async (values) => {
     setLoading(true);
     try {
-      await dummyAuthService.register(values);
+      await authService.register(values);
       toast.success("Registration complete. Please log in.");
       navigate(ROUTE_PATHS.login);
     } catch (error) {
-      toast.error(error.message || "Registration failed.");
+      const message =
+        error?.response?.data?.detail ||
+        error?.response?.data?.non_field_errors?.[0] ||
+        error.message ||
+        "Registration failed.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export function RegisterPage() {
         Create your account
       </h2>
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-        Register as Student, Teacher, or Admin with dummy data.
+        Create a student account for the AMS portal.
       </p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
@@ -92,23 +94,6 @@ export function RegisterPage() {
               },
             })}
           />
-        </FormField>
-
-        <FormField
-          label="Role"
-          htmlFor="register-role"
-          error={errors.role?.message}
-        >
-          <Select
-            id="register-role"
-            {...register("role", { required: "Please choose a role." })}
-          >
-            {AUTH_ROLE_OPTIONS.map((role) => (
-              <option key={role.value} value={role.value}>
-                {role.label}
-              </option>
-            ))}
-          </Select>
         </FormField>
 
         <FormField

@@ -1,5 +1,6 @@
 import axios from "axios";
-import { dummyAuthService } from "./dummy-auth";
+
+const ACCESS_TOKEN_KEY = "ams-access-token";
 
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "/api",
@@ -7,10 +8,10 @@ export const http = axios.create({
 });
 
 http.interceptors.request.use((config) => {
-  const session = dummyAuthService.getSession();
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
 
-  if (session?.token) {
-    config.headers.Authorization = `Bearer ${session.token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
   config.headers["X-Requested-With"] = "AMS-Frontend";
@@ -21,6 +22,12 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem("ams-access-token");
+      localStorage.removeItem("ams-refresh-token");
+      localStorage.removeItem("ams-session");
+    }
+
     return Promise.reject(error);
   },
 );

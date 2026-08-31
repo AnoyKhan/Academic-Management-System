@@ -1,6 +1,9 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework import serializers
+
+from apps.students.models import Student
 
 
 User = get_user_model()
@@ -98,6 +101,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         )
         user.set_password(password)
         user.save()
+
+        Student.objects.create(
+            user=user,
+            student_id=f"STU-{user.id:05d}",
+            department="General",
+            intake=str(timezone.now().year),
+            batch="A",
+            semester=1,
+        )
+
         return user
 
 

@@ -9,12 +9,12 @@ import { ProfileDropdown } from "./profile-dropdown";
 export function Topbar({ role, session, notifications = [], onToggleSidebar }) {
   return (
     <header className="sticky top-0 z-30 border-b border-white/60 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/70 md:px-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
             size="sm"
-            className="md:hidden"
+            className="lg:hidden"
             onClick={onToggleSidebar}
             aria-label="Open navigation menu"
           >
@@ -25,7 +25,7 @@ export function Topbar({ role, session, notifications = [], onToggleSidebar }) {
         </div>
 
         <div className="flex min-w-0 items-center gap-2 md:ml-auto">
-          <div className="hidden w-full max-w-md sm:block md:min-w-[280px]">
+          <div className="hidden w-full max-w-md sm:block lg:min-w-[280px]">
             <Input
               placeholder="Search modules, classes, users..."
               aria-label="Global search"

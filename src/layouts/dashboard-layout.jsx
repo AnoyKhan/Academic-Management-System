@@ -1,19 +1,58 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { Sidebar } from "../components/layout/sidebar";
 import { Topbar } from "../components/layout/topbar";
 import { useAppDispatch } from "../hooks/useAppDispatch";
 import { useAppSelector } from "../hooks/useAppSelector";
 import { setMobileMenu, toggleMobileMenu } from "../store/slices/uiSlice";
-import { MOCK_NOTIFICATIONS } from "../data/role-dashboard";
-import { dummyAuthService } from "../services/dummy-auth";
+import { authService } from "../services/auth.service";
+import { adminService } from "../services/admin.service";
+import { studentService } from "../services/student.service";
+import { teacherService } from "../services/teacher.service";
 
 export function DashboardLayout({ role = "student" }) {
   const dispatch = useAppDispatch();
   const location = useLocation();
   const mobileMenuOpen = useAppSelector((state) => state.ui.mobileMenuOpen);
-  const session = dummyAuthService.getSession();
-  const notifications = MOCK_NOTIFICATIONS[role] ?? [];
+  const session = authService.getSession();
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    const service = {
+      admin: adminService,
+      student: studentService,
+      teacher: teacherService,
+    }[role];
+
+    if (!service) {
+      setNotifications([]);
+      return undefined;
+    }
+
+    let isMounted = true;
+    service
+      .getNotifications()
+      .then((response) => {
+        if (!isMounted) return;
+        const payload = service.unwrapData(response);
+        const records = Array.isArray(payload)
+          ? payload
+          : (payload?.results ?? []);
+        setNotifications(
+          records
+            .filter((item) => !item.is_read)
+            .map((item) => `${item.title}: ${item.message}`),
+        );
+      })
+      .catch(() => {
+        if (isMounted) setNotifications([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [role]);
 
   return (
     <div className="min-h-screen bg-app-gradient text-slate-900 dark:text-slate-100">
@@ -24,7 +63,7 @@ export function DashboardLayout({ role = "student" }) {
         Skip to main content
       </a>
       <div className="flex min-h-screen">
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <Sidebar role={role} />
         </div>
 
@@ -34,7 +73,7 @@ export function DashboardLayout({ role = "student" }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 md:hidden"
+              className="fixed inset-0 z-40 lg:hidden"
             >
               <button
                 type="button"

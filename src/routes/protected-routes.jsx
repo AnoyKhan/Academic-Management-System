@@ -1,12 +1,12 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { dummyAuthService } from "../services/dummy-auth";
+import { authService } from "../services/auth.service";
 import { ROUTE_PATHS } from "./route-paths";
 
 export function RequireAuth() {
   const location = useLocation();
-  const session = dummyAuthService.getSession();
+  const session = authService.getSession();
 
-  if (!session) {
+  if (!session?.accessToken) {
     return (
       <Navigate to={ROUTE_PATHS.login} replace state={{ from: location }} />
     );
@@ -16,9 +16,9 @@ export function RequireAuth() {
 }
 
 export function RequireRole({ role }) {
-  const session = dummyAuthService.getSession();
+  const session = authService.getSession();
 
-  if (!session) {
+  if (!session?.accessToken) {
     return <Navigate to={ROUTE_PATHS.login} replace />;
   }
 
@@ -30,12 +30,10 @@ export function RequireRole({ role }) {
 }
 
 export function RedirectIfAuthenticated() {
-  const session = dummyAuthService.getSession();
+  const session = authService.getSession();
 
-  if (session) {
-    return (
-      <Navigate to={dummyAuthService.getDashboardPath(session.role)} replace />
-    );
+  if (session?.accessToken) {
+    return <Navigate to={authService.getDashboardPath(session.role)} replace />;
   }
 
   return <Outlet />;

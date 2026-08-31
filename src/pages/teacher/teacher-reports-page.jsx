@@ -4,7 +4,7 @@ export function TeacherReportsPage() {
   return (
     <RoleSectionPage
       title="Teacher Reports"
-      description="Generate academic reports and class performance snapshots. This page contains mocked, frontend-only content."
+      description="No report-generation backend API is available yet, so this page remains intentionally offline until the server contract is implemented."
     />
   );
 }

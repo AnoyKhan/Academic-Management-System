@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { Card } from "../../components/ui/card";
@@ -6,23 +6,77 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { FormField } from "../../components/forms/form-field";
-import { studentProfile } from "../../data/student-portal-data";
+import { studentService } from "../../services/student.service";
 
 export function StudentProfileSettingsPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm({
-    defaultValues: studentProfile,
+    defaultValues: {
+      studentId: "",
+      name: "",
+      email: "",
+      department: "",
+      intake: "",
+      batch: "",
+      semester: "",
+    },
   });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        const response = await studentService.getProfile();
+        const payload = studentService.unwrapData(response);
+        const profile = payload?.student ?? payload;
+
+        if (isMounted) {
+          reset({
+            studentId: profile.student_id ?? "",
+            name: profile.name ?? "",
+            email: profile.email ?? "",
+            department: profile.department ?? "",
+            intake: profile.intake ?? "",
+            batch: profile.batch ?? "",
+            semester: profile.semester ?? "",
+          });
+          setError("");
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(
+            loadError?.response?.data?.message || "Unable to load profile.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reset]);
 
   const onSubmit = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    toast.success("Profile updated successfully (mock).");
+    toast("Profile updates are not yet supported by the backend API.", {
+      icon: "ℹ️",
+    });
     setSaving(false);
   };
 
@@ -33,116 +87,90 @@ export function StudentProfileSettingsPage() {
           Profile Settings
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Manage contact details and guardian information. Changes are stored
-          only in mock state.
+          Live profile information from the authenticated student record.
         </p>
       </Card>
 
-      <Card>
-        <form
-          className="grid gap-4 md:grid-cols-2"
-          onSubmit={handleSubmit(onSubmit)}
-        >
-          <FormField
-            label="Student ID"
-            htmlFor="student-id"
-            error={errors.studentId?.message}
+      {loading ? (
+        <Card>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Loading profile…
+          </p>
+        </Card>
+      ) : error ? (
+        <Card>
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </Card>
+      ) : (
+        <Card>
+          <form
+            className="grid gap-4 md:grid-cols-2"
+            onSubmit={handleSubmit(onSubmit)}
           >
-            <Input id="student-id" disabled {...register("studentId")} />
-          </FormField>
-
-          <FormField
-            label="Full Name"
-            htmlFor="name"
-            error={errors.name?.message}
-          >
-            <Input
-              id="name"
-              {...register("name", {
-                required: "Name is required.",
-              })}
-            />
-          </FormField>
-
-          <FormField
-            label="Email"
-            htmlFor="email"
-            error={errors.email?.message}
-          >
-            <Input
-              id="email"
-              type="email"
-              {...register("email", {
-                required: "Email is required.",
-              })}
-            />
-          </FormField>
-
-          <FormField
-            label="Phone"
-            htmlFor="phone"
-            error={errors.phone?.message}
-          >
-            <Input
-              id="phone"
-              {...register("phone", { required: "Phone is required." })}
-            />
-          </FormField>
-
-          <FormField
-            label="Department"
-            htmlFor="department"
-            error={errors.department?.message}
-          >
-            <Input id="department" {...register("department")} />
-          </FormField>
-
-          <FormField
-            label="Semester"
-            htmlFor="semester"
-            error={errors.semester?.message}
-          >
-            <Input id="semester" {...register("semester")} />
-          </FormField>
-
-          <FormField
-            label="Guardian Name"
-            htmlFor="guardianName"
-            error={errors.guardianName?.message}
-          >
-            <Input id="guardianName" {...register("guardianName")} />
-          </FormField>
-
-          <FormField
-            label="Guardian Phone"
-            htmlFor="guardianPhone"
-            error={errors.guardianPhone?.message}
-          >
-            <Input id="guardianPhone" {...register("guardianPhone")} />
-          </FormField>
-
-          <div className="md:col-span-2">
             <FormField
-              label="Address"
-              htmlFor="address"
-              error={errors.address?.message}
+              label="Student ID"
+              htmlFor="studentId"
+              error={errors.studentId?.message}
             >
-              <textarea
-                id="address"
-                rows={4}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                {...register("address")}
-              />
+              <Input id="studentId" disabled {...register("studentId")} />
             </FormField>
-          </div>
 
-          <div className="md:col-span-2">
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader label="Saving changes..." /> : "Save Changes"}
-            </Button>
-          </div>
-        </form>
-      </Card>
+            <FormField
+              label="Full Name"
+              htmlFor="name"
+              error={errors.name?.message}
+            >
+              <Input id="name" {...register("name")} />
+            </FormField>
+
+            <FormField
+              label="Email"
+              htmlFor="email"
+              error={errors.email?.message}
+            >
+              <Input id="email" type="email" {...register("email")} />
+            </FormField>
+
+            <FormField
+              label="Department"
+              htmlFor="department"
+              error={errors.department?.message}
+            >
+              <Input id="department" {...register("department")} />
+            </FormField>
+
+            <FormField
+              label="Intake"
+              htmlFor="intake"
+              error={errors.intake?.message}
+            >
+              <Input id="intake" {...register("intake")} />
+            </FormField>
+
+            <FormField
+              label="Batch"
+              htmlFor="batch"
+              error={errors.batch?.message}
+            >
+              <Input id="batch" {...register("batch")} />
+            </FormField>
+
+            <FormField
+              label="Semester"
+              htmlFor="semester"
+              error={errors.semester?.message}
+            >
+              <Input id="semester" {...register("semester")} />
+            </FormField>
+
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? <Loader label="Saving changes..." /> : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
     </div>
   );
 }

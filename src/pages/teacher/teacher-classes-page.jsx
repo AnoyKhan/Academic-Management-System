@@ -4,7 +4,7 @@ export function TeacherClassesPage() {
   return (
     <RoleSectionPage
       title="Teacher Classes"
-      description="Manage assigned classes, subject loads, and section details with role-specific layout behavior."
+      description="No backend API currently exists for teacher class management, so this page remains intentionally unavailable until the server contract is added."
     />
   );
 }

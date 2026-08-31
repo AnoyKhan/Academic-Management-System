@@ -7,6 +7,7 @@ from .views import (
     StudentCourseListView,
     StudentDashboardView,
     StudentGradeListView,
+    StudentNotificationListView,
     StudentProfileView,
 )
 
@@ -32,5 +33,6 @@ urlpatterns = [
         StudentAttendanceListView.as_view(),
         name="student-attendance",
     ),
+    path("notifications/", StudentNotificationListView.as_view(), name="student-notifications"),
     path("dashboard/", StudentDashboardView.as_view(), name="student-dashboard"),
 ]

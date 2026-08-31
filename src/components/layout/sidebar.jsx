@@ -60,9 +60,7 @@ export function Sidebar({ role = "student", mobile = false, onNavigate }) {
       {mobile ? null : (
         <div className="mt-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-4 text-sm text-white">
           <p className="font-semibold">{roleLabel} Console</p>
-          <p className="mt-1 text-brand-100">
-            All data displayed here is mock data only.
-          </p>
+          <p className="mt-1 text-brand-100">Live data from the AMS backend.</p>
         </div>
       )}
     </aside>

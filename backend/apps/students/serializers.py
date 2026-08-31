@@ -4,6 +4,7 @@ from apps.assignments.models import Assignment, Submission
 from apps.attendance.models import Attendance
 from apps.courses.models import Course
 from apps.grades.models import Grade
+from apps.notifications.models import Notification
 from apps.shared.validators import validate_uploaded_file
 from .models import Student
 
@@ -116,3 +117,9 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attendance
         fields = ("course", "date", "status")
+
+
+class StudentNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ("id", "title", "message", "is_read", "created_at")

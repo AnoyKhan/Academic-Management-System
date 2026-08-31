@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { Button } from "../ui/button";
 import { ROUTE_PATHS } from "../../routes/route-paths";
 import { ROLE_META } from "../../data/role-dashboard";
-import { dummyAuthService } from "../../services/dummy-auth";
+import { authService } from "../../services/auth.service";
 
 export function ProfileDropdown({ session }) {
   const navigate = useNavigate();
@@ -26,8 +26,8 @@ export function ProfileDropdown({ session }) {
     admin: ROUTE_PATHS.admin,
   };
 
-  const handleLogout = () => {
-    dummyAuthService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     toast.success("You are logged out.");
     navigate(ROUTE_PATHS.login);
   };

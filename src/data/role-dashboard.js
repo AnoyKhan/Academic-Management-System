@@ -41,6 +41,11 @@ export const ROLE_NAV_LINKS = {
       icon: LineChart,
     },
     {
+      label: "Analytics",
+      path: ROUTE_PATHS.studentAnalytics,
+      icon: LineChart,
+    },
+    {
       label: "Assignments",
       path: ROUTE_PATHS.studentAssignments,
       icon: ClipboardList,
@@ -113,6 +118,27 @@ export const ROLE_NAV_LINKS = {
       icon: CalendarDays,
     },
     {
+      label: "Assignments",
+      path: ROUTE_PATHS.adminAssignments,
+      icon: ClipboardList,
+    },
+    { label: "Grades", path: ROUTE_PATHS.adminGrades, icon: FileBarChart2 },
+    {
+      label: "Attendance",
+      path: ROUTE_PATHS.adminAttendance,
+      icon: CalendarDays,
+    },
+    {
+      label: "Notifications",
+      path: ROUTE_PATHS.adminNotifications,
+      icon: Bell,
+    },
+    {
+      label: "Analytics",
+      path: ROUTE_PATHS.adminAnalytics,
+      icon: LineChart,
+    },
+    {
       label: "AI Analytics",
       path: ROUTE_PATHS.adminAIAnalytics,
       icon: BrainCircuit,
@@ -123,6 +149,7 @@ export const ROLE_NAV_LINKS = {
       icon: SlidersHorizontal,
     },
     { label: "Reports", path: ROUTE_PATHS.adminReports, icon: FileBarChart2 },
+    { label: "Profile", path: ROUTE_PATHS.adminProfile, icon: UserCircle2 },
   ],
 };
 
