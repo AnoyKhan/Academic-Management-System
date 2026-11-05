@@ -224,7 +224,8 @@ function routeElement(Component) {
   );
 }
 
-export const appRouter = createBrowserRouter([
+export const appRouter = createBrowserRouter(
+  [
   {
     path: ROUTE_PATHS.root,
     element: <RootRedirect />,
@@ -392,7 +393,10 @@ export const appRouter = createBrowserRouter([
             path: "forgot-password",
             element: routeElement(ForgotPasswordPage),
           },
-          { path: "reset-password", element: routeElement(ResetPasswordPage) },
+          {
+            path: "reset-password/:uid/:token",
+            element: routeElement(ResetPasswordPage),
+          },
         ],
       },
     ],
@@ -402,4 +406,6 @@ export const appRouter = createBrowserRouter([
     element: routeElement(NotFoundPage),
     errorElement: <ErrorBoundaryPage />,
   },
-]);
+  ],
+  { basename: import.meta.env.BASE_URL },
+);
