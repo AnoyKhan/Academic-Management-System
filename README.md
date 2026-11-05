@@ -11,7 +11,7 @@
 
 **A comprehensive web application designed to streamline academic operations for educational institutions.**
 
-[Live Demo](https://demo-link.com) <!-- TODO: Add live demo link if available --> |
+[Deployment guide](./DEPLOYMENT.md) |
 [Documentation](https://github.com/AnoyKhan/Academic-Management-System/tree/main/docs)
 
 </div>

@@ -2,6 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -202,6 +203,48 @@ class AdminAssignmentSerializer(serializers.ModelSerializer):
         return obj.submissions.count()
 
 
+class AdminCourseWriteSerializer(serializers.ModelSerializer):
+    teacher_id = serializers.PrimaryKeyRelatedField(
+        source="teacher",
+        queryset=Teacher.objects.select_related("user"),
+    )
+
+    class Meta:
+        model = Course
+        fields = ("course_code", "course_name", "description", "credit", "teacher_id")
+
+
+class AdminAssignmentWriteSerializer(serializers.ModelSerializer):
+    course_id = serializers.PrimaryKeyRelatedField(
+        source="course",
+        queryset=Course.objects.select_related("teacher"),
+    )
+    teacher_id = serializers.PrimaryKeyRelatedField(
+        source="created_by",
+        queryset=Teacher.objects.select_related("user"),
+        required=False,
+    )
+
+    class Meta:
+        model = Assignment
+        fields = ("title", "description", "deadline", "attachment", "course_id", "teacher_id")
+
+    def validate_deadline(self, value):
+        if value <= timezone.now():
+            raise serializers.ValidationError("Deadline must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        course = attrs.get("course") or getattr(self.instance, "course", None)
+        teacher = attrs.get("created_by") or getattr(self.instance, "created_by", None)
+        if teacher is None and course is not None:
+            attrs["created_by"] = course.teacher
+            teacher = course.teacher
+        if course is not None and teacher is not None and course.teacher_id != teacher.id:
+            raise serializers.ValidationError({"teacher_id": "The selected teacher must teach the selected course."})
+        return attrs
+
+
 class AdminGradeSerializer(serializers.ModelSerializer):
     student = serializers.SerializerMethodField()
     assignment = serializers.SerializerMethodField()
@@ -249,6 +292,35 @@ class AdminGradeSerializer(serializers.ModelSerializer):
         }
 
 
+class AdminGradeWriteSerializer(serializers.ModelSerializer):
+    student_id = serializers.PrimaryKeyRelatedField(
+        source="student", queryset=Student.objects.select_related("user")
+    )
+    assignment_id = serializers.PrimaryKeyRelatedField(
+        source="assignment", queryset=Assignment.objects.select_related("course")
+    )
+    graded_by_id = serializers.PrimaryKeyRelatedField(
+        source="graded_by", queryset=Teacher.objects.select_related("user")
+    )
+
+    class Meta:
+        model = Grade
+        fields = ("student_id", "assignment_id", "marks", "feedback", "graded_by_id")
+        extra_kwargs = {"feedback": {"required": False, "allow_blank": True}}
+
+    def validate(self, attrs):
+        student = attrs.get("student", getattr(self.instance, "student", None))
+        assignment = attrs.get("assignment", getattr(self.instance, "assignment", None))
+        duplicate = Grade.objects.filter(student=student, assignment=assignment)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise serializers.ValidationError(
+                {"assignment_id": "This student already has a grade for this assignment."}
+            )
+        return attrs
+
+
 class AdminAttendanceSerializer(serializers.ModelSerializer):
     student = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
@@ -272,6 +344,32 @@ class AdminAttendanceSerializer(serializers.ModelSerializer):
         }
 
 
+class AdminAttendanceWriteSerializer(serializers.ModelSerializer):
+    student_id = serializers.PrimaryKeyRelatedField(
+        source="student", queryset=Student.objects.select_related("user")
+    )
+    course_id = serializers.PrimaryKeyRelatedField(
+        source="course", queryset=Course.objects.select_related("teacher")
+    )
+
+    class Meta:
+        model = Attendance
+        fields = ("student_id", "course_id", "date", "status")
+
+    def validate(self, attrs):
+        student = attrs.get("student", getattr(self.instance, "student", None))
+        course = attrs.get("course", getattr(self.instance, "course", None))
+        date = attrs.get("date", getattr(self.instance, "date", None))
+        duplicate = Attendance.objects.filter(student=student, course=course, date=date)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise serializers.ValidationError(
+                {"date": "This student already has attendance for this course and date."}
+            )
+        return attrs
+
+
 class AdminNotificationSerializer(serializers.ModelSerializer):
     receiver = serializers.SerializerMethodField()
 
@@ -286,6 +384,16 @@ class AdminNotificationSerializer(serializers.ModelSerializer):
             "email": obj.receiver.email,
             "role": obj.receiver.role,
         }
+
+
+class AdminNotificationWriteSerializer(serializers.ModelSerializer):
+    receiver_id = serializers.PrimaryKeyRelatedField(
+        source="receiver", queryset=User.objects.all()
+    )
+
+    class Meta:
+        model = Notification
+        fields = ("receiver_id", "title", "message", "is_read")
 
 
 class AdminBaseAPIView(APIView):
@@ -392,9 +500,26 @@ class AdminUserDetailView(AdminBaseAPIView):
 
 class AdminStudentListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Student.objects.select_related("user").order_by("student_id")
+        queryset = Student.objects.select_related("user").order_by("student_id", "id")
+        search = request.query_params.get("search", "").strip()
+        department = request.query_params.get("department", "").strip()
+        status_value = request.query_params.get("status", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(student_id__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(department__icontains=search)
+            )
+        if department:
+            queryset = queryset.filter(department=department)
+        if status_value in {"Active", "Inactive"}:
+            queryset = queryset.filter(user__is_active=status_value == "Active")
         return self.paginate(queryset, AdminStudentSerializer, "Students fetched successfully.")
 
+    @transaction.atomic
     def post(self, request):
         user_id = request.data.get("user_id")
         if user_id:
@@ -407,6 +532,10 @@ class AdminStudentListCreateView(AdminBaseAPIView):
             password = request.data.get("password") or "StrongPass123!"
             if not email:
                 return success_response("Email is required.", status_code=status.HTTP_400_BAD_REQUEST)
+            if User.objects.filter(email__iexact=email).exists():
+                return success_response("A user with this email already exists.", status_code=status.HTTP_400_BAD_REQUEST)
+            if User.objects.filter(username=username).exists():
+                return success_response("A user with this username already exists.", status_code=status.HTTP_400_BAD_REQUEST)
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -421,6 +550,8 @@ class AdminStudentListCreateView(AdminBaseAPIView):
             return success_response("Student profile already exists for this user.", status_code=status.HTTP_400_BAD_REQUEST)
 
         student_id = request.data.get("student_id") or f"STU-{user.id:05d}"
+        if Student.objects.filter(student_id=student_id).exists():
+            return success_response("A student with this ID already exists.", status_code=status.HTTP_400_BAD_REQUEST)
         student = Student.objects.create(
             user=user,
             student_id=student_id,
@@ -488,9 +619,30 @@ class AdminStudentDetailView(AdminBaseAPIView):
 
 class AdminTeacherListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Teacher.objects.select_related("user").order_by("employee_id")
+        queryset = Teacher.objects.select_related("user").order_by("employee_id", "id")
+        search = request.query_params.get("search", "").strip()
+        department = request.query_params.get("department", "").strip()
+        designation = request.query_params.get("designation", "").strip()
+        status_value = request.query_params.get("status", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(employee_id__icontains=search)
+                | Q(department__icontains=search)
+                | Q(designation__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+            )
+        if department:
+            queryset = queryset.filter(department__iexact=department)
+        if designation:
+            queryset = queryset.filter(designation__iexact=designation)
+        if status_value in {"Active", "Inactive"}:
+            queryset = queryset.filter(user__is_active=status_value == "Active")
         return self.paginate(queryset, AdminTeacherSerializer, "Teachers fetched successfully.")
 
+    @transaction.atomic
     def post(self, request):
         user_id = request.data.get("user_id")
         if user_id:
@@ -503,6 +655,10 @@ class AdminTeacherListCreateView(AdminBaseAPIView):
             password = request.data.get("password") or "StrongPass123!"
             if not email:
                 return success_response("Email is required.", status_code=status.HTTP_400_BAD_REQUEST)
+            if User.objects.filter(email__iexact=email).exists():
+                return success_response("A user with this email already exists.", status_code=status.HTTP_400_BAD_REQUEST)
+            if User.objects.filter(username=username).exists():
+                return success_response("A user with this username already exists.", status_code=status.HTTP_400_BAD_REQUEST)
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -516,9 +672,12 @@ class AdminTeacherListCreateView(AdminBaseAPIView):
         if Teacher.objects.filter(user=user).exists():
             return success_response("Teacher profile already exists for this user.", status_code=status.HTTP_400_BAD_REQUEST)
 
+        employee_id = request.data.get("employee_id") or f"EMP-{user.id:05d}"
+        if Teacher.objects.filter(employee_id=employee_id).exists():
+            return success_response("A teacher with this employee ID already exists.", status_code=status.HTTP_400_BAD_REQUEST)
         teacher = Teacher.objects.create(
             user=user,
-            employee_id=request.data.get("employee_id") or f"EMP-{user.id:05d}",
+            employee_id=employee_id,
             department=request.data.get("department", "General"),
             designation=request.data.get("designation", "Lecturer"),
             joining_date=request.data.get("joining_date"),
@@ -574,19 +733,27 @@ class AdminTeacherDetailView(AdminBaseAPIView):
 
 class AdminCourseListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Course.objects.select_related("teacher__user").order_by("course_code")
+        queryset = Course.objects.select_related("teacher__user").order_by("course_code", "id")
+        search = request.query_params.get("search", "").strip()
+        teacher_id = request.query_params.get("teacher_id", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(course_code__icontains=search)
+                | Q(course_name__icontains=search)
+                | Q(description__icontains=search)
+                | Q(teacher__employee_id__icontains=search)
+                | Q(teacher__department__icontains=search)
+                | Q(teacher__user__first_name__icontains=search)
+                | Q(teacher__user__last_name__icontains=search)
+            )
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
         return self.paginate(queryset, AdminCourseSerializer, "Courses fetched successfully.")
 
     def post(self, request):
-        teacher_id = request.data.get("teacher_id")
-        teacher = get_object_or_404(Teacher.objects.select_related("user"), id=teacher_id)
-        course = Course.objects.create(
-            course_code=request.data.get("course_code"),
-            course_name=request.data.get("course_name"),
-            description=request.data.get("description", ""),
-            credit=request.data.get("credit", 3),
-            teacher=teacher,
-        )
+        serializer = AdminCourseWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        course = serializer.save()
         return success_response(
             "Course created successfully.",
             {"course": AdminCourseSerializer(course).data},
@@ -601,17 +768,9 @@ class AdminCourseDetailView(AdminBaseAPIView):
 
     def put(self, request, course_id):
         course = get_object_or_404(Course.objects.select_related("teacher__user"), id=course_id)
-        if request.data.get("teacher_id"):
-            course.teacher = get_object_or_404(Teacher.objects.all(), id=request.data["teacher_id"])
-        if request.data.get("course_code") is not None:
-            course.course_code = request.data["course_code"]
-        if request.data.get("course_name") is not None:
-            course.course_name = request.data["course_name"]
-        if request.data.get("description") is not None:
-            course.description = request.data["description"]
-        if request.data.get("credit") is not None:
-            course.credit = request.data["credit"]
-        course.save()
+        serializer = AdminCourseWriteSerializer(course, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        course = serializer.save()
         return success_response("Course updated successfully.", {"course": AdminCourseSerializer(course).data})
 
     def delete(self, request, course_id):
@@ -622,25 +781,32 @@ class AdminCourseDetailView(AdminBaseAPIView):
 
 class AdminAssignmentListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Assignment.objects.select_related("course", "created_by__user").order_by("-deadline")
+        queryset = Assignment.objects.select_related("course", "created_by__user").order_by(
+            "-deadline", "-id"
+        )
+        search = request.query_params.get("search", "").strip()
+        course_id = request.query_params.get("course_id", "").strip()
+        deadline_from = request.query_params.get("deadline_from", "").strip()
+        deadline_to = request.query_params.get("deadline_to", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search)
+                | Q(description__icontains=search)
+                | Q(course__course_code__icontains=search)
+                | Q(course__course_name__icontains=search)
+            )
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if deadline_from:
+            queryset = queryset.filter(deadline__date__gte=deadline_from)
+        if deadline_to:
+            queryset = queryset.filter(deadline__date__lte=deadline_to)
         return self.paginate(queryset, AdminAssignmentSerializer, "Assignments fetched successfully.")
 
     def post(self, request):
-        course_id = request.data.get("course_id")
-        teacher_id = request.data.get("teacher_id")
-        course = get_object_or_404(Course.objects.select_related("teacher"), id=course_id)
-        teacher = get_object_or_404(Teacher.objects.select_related("user"), id=teacher_id or course.teacher_id)
-        if course.teacher_id != teacher.id:
-            return success_response("The selected teacher must match the course teacher.", status_code=status.HTTP_400_BAD_REQUEST)
-
-        assignment = Assignment.objects.create(
-            course=course,
-            title=request.data.get("title"),
-            description=request.data.get("description", ""),
-            attachment=request.data.get("attachment"),
-            deadline=request.data.get("deadline"),
-            created_by=teacher,
-        )
+        serializer = AdminAssignmentWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assignment = serializer.save()
         return success_response(
             "Assignment created successfully.",
             {"assignment": AdminAssignmentSerializer(assignment).data},
@@ -655,19 +821,9 @@ class AdminAssignmentDetailView(AdminBaseAPIView):
 
     def put(self, request, assignment_id):
         assignment = get_object_or_404(Assignment.objects.select_related("course", "created_by__user"), id=assignment_id)
-        if request.data.get("course_id"):
-            assignment.course = get_object_or_404(Course.objects.all(), id=request.data["course_id"])
-        if request.data.get("teacher_id"):
-            assignment.created_by = get_object_or_404(Teacher.objects.all(), id=request.data["teacher_id"])
-        if request.data.get("title") is not None:
-            assignment.title = request.data["title"]
-        if request.data.get("description") is not None:
-            assignment.description = request.data["description"]
-        if request.data.get("deadline") is not None:
-            assignment.deadline = request.data["deadline"]
-        if request.data.get("attachment") is not None:
-            assignment.attachment = request.data["attachment"]
-        assignment.save()
+        serializer = AdminAssignmentWriteSerializer(assignment, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        assignment = serializer.save()
         return success_response("Assignment updated successfully.", {"assignment": AdminAssignmentSerializer(assignment).data})
 
     def delete(self, request, assignment_id):
@@ -678,20 +834,36 @@ class AdminAssignmentDetailView(AdminBaseAPIView):
 
 class AdminGradeListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Grade.objects.select_related("student__user", "assignment__course", "graded_by__user").order_by("-created_at")
+        queryset = Grade.objects.select_related(
+            "student__user", "assignment__course", "graded_by__user"
+        ).order_by("-created_at", "-id")
+        search = request.query_params.get("search", "").strip()
+        student_id = request.query_params.get("student_id", "").strip()
+        assignment_id = request.query_params.get("assignment_id", "").strip()
+        course_id = request.query_params.get("course_id", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(student__student_id__icontains=search)
+                | Q(student__user__username__icontains=search)
+                | Q(student__user__email__icontains=search)
+                | Q(student__user__first_name__icontains=search)
+                | Q(student__user__last_name__icontains=search)
+                | Q(assignment__title__icontains=search)
+                | Q(assignment__course__course_code__icontains=search)
+                | Q(assignment__course__course_name__icontains=search)
+            )
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if assignment_id:
+            queryset = queryset.filter(assignment_id=assignment_id)
+        if course_id:
+            queryset = queryset.filter(assignment__course_id=course_id)
         return self.paginate(queryset, AdminGradeSerializer, "Grades fetched successfully.")
 
     def post(self, request):
-        student = get_object_or_404(Student.objects.select_related("user"), id=request.data.get("student_id"))
-        assignment = get_object_or_404(Assignment.objects.select_related("course"), id=request.data.get("assignment_id"))
-        teacher = get_object_or_404(Teacher.objects.select_related("user"), id=request.data.get("graded_by_id"))
-        grade = Grade.objects.create(
-            student=student,
-            assignment=assignment,
-            marks=request.data.get("marks"),
-            feedback=request.data.get("feedback", ""),
-            graded_by=teacher,
-        )
+        serializer = AdminGradeWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        grade = serializer.save()
         return success_response(
             "Grade recorded successfully.",
             {"grade": AdminGradeSerializer(grade).data},
@@ -699,34 +871,106 @@ class AdminGradeListCreateView(AdminBaseAPIView):
         )
 
 
+class AdminGradeDetailView(AdminBaseAPIView):
+    def get_object(self, grade_id):
+        return get_object_or_404(
+            Grade.objects.select_related("student__user", "assignment__course", "graded_by__user"),
+            id=grade_id,
+        )
+
+    def get(self, request, grade_id):
+        return success_response("Grade fetched successfully.", {"grade": AdminGradeSerializer(self.get_object(grade_id)).data})
+
+    def put(self, request, grade_id):
+        return self.update(request, grade_id, partial=False)
+
+    def patch(self, request, grade_id):
+        return self.update(request, grade_id, partial=True)
+
+    def update(self, request, grade_id, partial):
+        grade = self.get_object(grade_id)
+        serializer = AdminGradeWriteSerializer(grade, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        grade = serializer.save()
+        return success_response("Grade updated successfully.", {"grade": AdminGradeSerializer(grade).data})
+
+    def delete(self, request, grade_id):
+        grade = self.get_object(grade_id)
+        grade.delete()
+        return success_response("Grade deleted successfully.")
+
+
 class AdminAttendanceListCreateView(AdminBaseAPIView):
     def get(self, request):
-        queryset = Attendance.objects.select_related("student__user", "course__teacher__user").order_by("-date")
-        student_id = request.query_params.get("student_id")
-        course_id = request.query_params.get("course_id")
-        status_value = request.query_params.get("status")
+        queryset = Attendance.objects.select_related(
+            "student__user", "course__teacher__user"
+        ).order_by("-date", "-id")
+        search = request.query_params.get("search", "").strip()
+        student_id = request.query_params.get("student_id", "").strip()
+        course_id = request.query_params.get("course_id", "").strip()
+        status_value = request.query_params.get("status", "").strip()
+        date_from = request.query_params.get("date_from", "").strip()
+        date_to = request.query_params.get("date_to", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(student__student_id__icontains=search)
+                | Q(student__user__username__icontains=search)
+                | Q(student__user__email__icontains=search)
+                | Q(student__user__first_name__icontains=search)
+                | Q(student__user__last_name__icontains=search)
+                | Q(course__course_code__icontains=search)
+                | Q(course__course_name__icontains=search)
+            )
         if student_id:
             queryset = queryset.filter(student_id=student_id)
         if course_id:
             queryset = queryset.filter(course_id=course_id)
         if status_value:
             queryset = queryset.filter(status=status_value)
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
         return self.paginate(queryset, AdminAttendanceSerializer, "Attendance fetched successfully.")
 
     def post(self, request):
-        student = get_object_or_404(Student.objects.select_related("user"), id=request.data.get("student_id"))
-        course = get_object_or_404(Course.objects.select_related("teacher"), id=request.data.get("course_id"))
-        attendance = Attendance.objects.create(
-            student=student,
-            course=course,
-            date=request.data.get("date"),
-            status=request.data.get("status"),
-        )
+        serializer = AdminAttendanceWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attendance = serializer.save()
         return success_response(
             "Attendance recorded successfully.",
             {"attendance": AdminAttendanceSerializer(attendance).data},
             status_code=status.HTTP_201_CREATED,
         )
+
+
+class AdminAttendanceDetailView(AdminBaseAPIView):
+    def get_object(self, attendance_id):
+        return get_object_or_404(
+            Attendance.objects.select_related("student__user", "course__teacher__user"),
+            id=attendance_id,
+        )
+
+    def get(self, request, attendance_id):
+        return success_response("Attendance fetched successfully.", {"attendance": AdminAttendanceSerializer(self.get_object(attendance_id)).data})
+
+    def put(self, request, attendance_id):
+        return self.update(request, attendance_id, partial=False)
+
+    def patch(self, request, attendance_id):
+        return self.update(request, attendance_id, partial=True)
+
+    def update(self, request, attendance_id, partial):
+        attendance = self.get_object(attendance_id)
+        serializer = AdminAttendanceWriteSerializer(attendance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        attendance = serializer.save()
+        return success_response("Attendance updated successfully.", {"attendance": AdminAttendanceSerializer(attendance).data})
+
+    def delete(self, request, attendance_id):
+        attendance = self.get_object(attendance_id)
+        attendance.delete()
+        return success_response("Attendance deleted successfully.")
 
 
 class AdminNotificationListCreateView(AdminBaseAPIView):
@@ -738,18 +982,40 @@ class AdminNotificationListCreateView(AdminBaseAPIView):
         return self.paginate(queryset, AdminNotificationSerializer, "Notifications fetched successfully.")
 
     def post(self, request):
-        receiver = get_object_or_404(User.objects.all(), id=request.data.get("receiver_id"))
-        notification = Notification.objects.create(
-            receiver=receiver,
-            title=request.data.get("title"),
-            message=request.data.get("message", ""),
-            is_read=request.data.get("is_read", False),
-        )
+        serializer = AdminNotificationWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        notification = serializer.save()
         return success_response(
             "Notification created successfully.",
             {"notification": AdminNotificationSerializer(notification).data},
             status_code=status.HTTP_201_CREATED,
         )
+
+
+class AdminNotificationDetailView(AdminBaseAPIView):
+    def get_object(self, notification_id):
+        return get_object_or_404(Notification.objects.select_related("receiver"), id=notification_id)
+
+    def get(self, request, notification_id):
+        return success_response("Notification fetched successfully.", {"notification": AdminNotificationSerializer(self.get_object(notification_id)).data})
+
+    def put(self, request, notification_id):
+        return self.update(request, notification_id, partial=False)
+
+    def patch(self, request, notification_id):
+        return self.update(request, notification_id, partial=True)
+
+    def update(self, request, notification_id, partial):
+        notification = self.get_object(notification_id)
+        serializer = AdminNotificationWriteSerializer(notification, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        notification = serializer.save()
+        return success_response("Notification updated successfully.", {"notification": AdminNotificationSerializer(notification).data})
+
+    def delete(self, request, notification_id):
+        notification = self.get_object(notification_id)
+        notification.delete()
+        return success_response("Notification deleted successfully.")
 
 
 class AdminAnalyticsView(AdminBaseAPIView):
